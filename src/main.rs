@@ -8,6 +8,7 @@ use log::Level;
 
 mod day1;
 mod day2;
+mod day3;
 
 fn main() {
     let matches = App::new("aoc2019")
@@ -39,6 +40,8 @@ fn main() {
         "1-2" => execute("1.txt", day1::run2),
         "2-1" => execute("2.txt", day2::run1),
         "2-2" => execute("2.txt", day2::run2),
+        "3-1" => execute("3.txt", day3::run1),
+        "3-2" => execute("3.txt", day3::run2),
         _ => "No puzzle with that number".to_string()
     })
 }
@@ -46,10 +49,12 @@ fn main() {
 fn execute<F, T: FromStr, R: Display>(input_path: &str, f: F) -> String
         where F: FnOnce(Vec<T>) -> R
 {
-    let input = std::fs::read_to_string("input/".to_string() + input_path)
-        .unwrap()
-        .lines()
+    let input = std::fs::read_to_string("input/".to_string() + input_path).unwrap();
+    f(parse_input(&input)).to_string()
+}
+
+pub fn parse_input<T: FromStr>(input: &str) -> Vec<T> {
+    input.lines()
         .map(|it| it.parse().ok().expect(&format!("Could not parse input: {}", it)))
-        .collect();
-    f(input).to_string()
+        .collect()
 }
