@@ -9,6 +9,7 @@ use log::Level;
 mod day1;
 mod day2;
 mod day3;
+mod day4;
 
 fn main() {
     let matches = App::new("aoc2019")
@@ -42,6 +43,8 @@ fn main() {
         "2-2" => execute("2.txt", day2::run2),
         "3-1" => execute("3.txt", day3::run1),
         "3-2" => execute("3.txt", day3::run2),
+        "4-1" => day4::run1(),
+        "4-2" => day4::run2(),
         _ => "No puzzle with that number".to_string()
     })
 }
