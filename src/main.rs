@@ -1,15 +1,18 @@
 #[macro_use] extern crate itertools;
 
-use std::fmt::Display;
+use std::fmt::Debug;
 use std::str::FromStr;
 
 use clap::{App, Arg};
 use log::Level;
 
+mod intcode;
+
 mod day1;
 mod day2;
 mod day3;
 mod day4;
+mod day5;
 
 fn main() {
     let matches = App::new("aoc2019")
@@ -45,15 +48,17 @@ fn main() {
         "3-2" => execute("3.txt", day3::run2),
         "4-1" => day4::run1(),
         "4-2" => day4::run2(),
+        "5-1" => execute("5.txt", day5::run1),
+        "5-2" => execute("5.txt", day5::run2),
         _ => "No puzzle with that number".to_string()
     })
 }
 
-fn execute<F, T: FromStr, R: Display>(input_path: &str, f: F) -> String
+fn execute<F, T: FromStr, R: Debug>(input_path: &str, f: F) -> String
         where F: FnOnce(Vec<T>) -> R
 {
     let input = std::fs::read_to_string("input/".to_string() + input_path).unwrap();
-    f(parse_input(&input)).to_string()
+    format!("{:#?}", f(parse_input(&input)))
 }
 
 pub fn parse_input<T: FromStr>(input: &str) -> Vec<T> {
