@@ -14,6 +14,7 @@ mod day3;
 mod day4;
 mod day5;
 mod day6;
+mod day7;
 
 fn main() {
     let matches = App::new("aoc2019")
@@ -53,6 +54,8 @@ fn main() {
         "5-2" => execute("5.txt", day5::run2),
         "6-1" => execute("6.txt", day6::run1),
         "6-2" => execute("6.txt", day6::run2),
+        "7-1" => execute("7.txt", day7::run1),
+        "7-2" => execute("7.txt", day7::run2),
         _ => "No puzzle with that number".to_string()
     })
 }
@@ -60,7 +63,7 @@ fn main() {
 fn execute<F, T: FromStr, R: Debug>(input_path: &str, f: F) -> String
         where F: FnOnce(Vec<T>) -> R
 {
-    let input = std::fs::read_to_string("input/".to_string() + input_path).unwrap();
+    let input = std::fs::read_to_string(format!("input/{}", input_path)).unwrap();
     format!("{:#?}", f(parse_input(&input)))
 }
 
