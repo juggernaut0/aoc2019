@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::intcode::ComputerState::{Halted, WaitingOnInput};
+use std::ops::DerefMut;
 
 pub type Program = Vec<i32>;
 
@@ -10,17 +11,22 @@ pub fn parse_program(s: &str) -> Program {
 }
 
 pub fn execute_no_io(program: &mut Program) {
-    let input: [i32;0] = [];
-    execute(program, &mut input.iter());
+    execute_streaming::<&mut Stream, &mut Stream>(program, 0, None, None);
 }
 
 pub fn execute(program: &mut Program, input: &mut dyn Iterator<Item=&i32>) -> Vec<i32> {
     let mut output = Stream::new();
-    execute_streaming(program, 0, &mut Stream::from_iter(input), &mut output);
+    let (state, _) = execute_streaming(program, 0, Some(&mut Stream::from_iter(input)), Some(&mut output));
+    if state == WaitingOnInput {
+        panic!("Unexpected end of input");
+    }
     output.into_vec()
 }
 
-fn execute_streaming(program: &mut Program, init_ip: usize, input: &mut Stream, output: &mut Stream) -> (ComputerState, usize) {
+fn execute_streaming<TIn, TOut>(program: &mut Program, init_ip: usize, mut input: Option<TIn>, mut output: Option<TOut>) -> (ComputerState, usize)
+        where TIn: DerefMut<Target=Stream>,
+              TOut: DerefMut<Target=Stream>,
+{
     let mut ip: usize = init_ip;
     loop {
         let instr = program[ip];
@@ -46,9 +52,9 @@ fn execute_streaming(program: &mut Program, init_ip: usize, input: &mut Stream, 
             }
             3 => {
                 log::debug!("trying to read...");
-                let inp = match input.read() {
+                let inp = match input.as_mut().and_then(|s| (*s).read()) {
                     Some(x) => x,
-                    None => return (WaitingOnInput, ip)
+                    None => return (WaitingOnInput, ip),
                 };
                 log::debug!("got an input: {}", inp);
                 let dest = program[ip + 1] as usize;
@@ -57,7 +63,9 @@ fn execute_streaming(program: &mut Program, init_ip: usize, input: &mut Stream, 
             }
             4 => {
                 let a = read(program, program[ip + 1], pm1);
-                output.write(a);
+                if let Some(s) = output.as_mut() {
+                    (*s).write(a);
+                }
                 ip += 2;
             }
             5 => {
@@ -144,9 +152,9 @@ impl Computer {
     }
 
     pub fn execute(&mut self) -> ComputerState {
-        let input = self.input.clone().unwrap_or_else(|| Rc::new(RefCell::new(Stream::new())));
-        let output = self.output.clone().unwrap_or_else(|| Rc::new(RefCell::new(Stream::new())));
-        let (state, ip) = execute_streaming(&mut self.program, self.ip, &mut input.borrow_mut(), &mut output.borrow_mut());
+        let input = self.input.as_ref().map(|it| it.borrow_mut());
+        let output = self.output.as_ref().map(|it| it.borrow_mut());
+        let (state, ip) = execute_streaming(&mut self.program, self.ip, input, output);
         self.ip = ip;
         state
     }
