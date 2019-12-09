@@ -2,125 +2,45 @@ use std::collections::VecDeque;
 use std::rc::Rc;
 use std::cell::RefCell;
 use crate::intcode::ComputerState::{Halted, WaitingOnInput};
-use std::ops::DerefMut;
 
-pub type Program = Vec<i32>;
+pub type Value = i64;
+pub type Program = Vec<Value>;
 
 pub fn parse_program(s: &str) -> Program {
     s.split(',').map(|it| it.trim().parse().unwrap()).collect()
 }
 
 pub fn execute_no_io(program: &mut Program) {
-    execute_streaming::<&mut Stream, &mut Stream>(program, 0, None, None);
-}
-
-pub fn execute(program: &mut Program, input: &mut dyn Iterator<Item=&i32>) -> Vec<i32> {
-    let mut output = Stream::new();
-    let (state, _) = execute_streaming(program, 0, Some(&mut Stream::from_iter(input)), Some(&mut output));
+    let mut comp = Computer::new(program.clone());
+    let state = comp.execute();
     if state == WaitingOnInput {
         panic!("Unexpected end of input");
     }
-    output.into_vec()
+    *program = comp.program
 }
 
-fn execute_streaming<TIn, TOut>(program: &mut Program, init_ip: usize, mut input: Option<TIn>, mut output: Option<TOut>) -> (ComputerState, usize)
-        where TIn: DerefMut<Target=Stream>,
-              TOut: DerefMut<Target=Stream>,
-{
-    let mut ip: usize = init_ip;
-    loop {
-        let instr = program[ip];
-        log::trace!("ip: {} instr: {}", ip, instr);
-        let op = instr % 100;
-        let pm1 = read_param_mode(instr, 1000);
-        let pm2 = read_param_mode(instr, 10000);
-        //let pm3 = read_param_mode(instr, 100000);
-        match op {
-            1 => {
-                let a = read(program, program[ip + 1], pm1);
-                let b = read(program, program[ip + 2], pm2);
-                let dest = program[ip + 3] as usize;
-                program[dest] = a + b;
-                ip += 4;
-            }
-            2 => {
-                let a = read(program, program[ip + 1], pm1);
-                let b = read(program, program[ip + 2], pm2);
-                let dest = program[ip + 3] as usize;
-                program[dest] = a * b;
-                ip += 4;
-            }
-            3 => {
-                log::debug!("trying to read...");
-                let inp = match input.as_mut().and_then(|s| (*s).read()) {
-                    Some(x) => x,
-                    None => return (WaitingOnInput, ip),
-                };
-                log::debug!("got an input: {}", inp);
-                let dest = program[ip + 1] as usize;
-                program[dest] = inp;
-                ip += 2;
-            }
-            4 => {
-                let a = read(program, program[ip + 1], pm1);
-                if let Some(s) = output.as_mut() {
-                    (*s).write(a);
-                }
-                ip += 2;
-            }
-            5 => {
-                let a = read(program, program[ip + 1], pm1);
-                let t = read(program, program[ip + 2], pm2);
-                if a != 0 {
-                    ip = t as usize;
-                } else {
-                    ip += 3;
-                }
-            }
-            6 => {
-                let a = read(program, program[ip + 1], pm1);
-                let t = read(program, program[ip + 2], pm2);
-                if a == 0 {
-                    ip = t as usize;
-                } else {
-                    ip += 3;
-                }
-            }
-            7 => {
-                let a = read(program, program[ip + 1], pm1);
-                let b = read(program, program[ip + 2], pm2);
-                let dest = program[ip + 3] as usize;
-                program[dest] = if a < b { 1 } else { 0 };
-                ip += 4;
-            }
-            8 => {
-                let a = read(program, program[ip + 1], pm1);
-                let b = read(program, program[ip + 2], pm2);
-                let dest = program[ip + 3] as usize;
-                program[dest] = if a == b { 1 } else { 0 };
-                ip += 4;
-            }
-            99 => return (Halted, ip),
-            _ => panic!("Unrecognized opcode: {} @ ip {}", op, ip)
-        }
+pub fn execute(program: &mut Program, input: &mut dyn Iterator<Item=&Value>) -> Vec<Value> {
+    let mut comp = Computer::new(program.clone());
+    let output = Rc::new(RefCell::new(Stream::new()));
+    comp.set_input(Some(Rc::new(RefCell::new(Stream::from_iter(input)))));
+    comp.set_output(Some(output));
+    let state = comp.execute();
+    if state == WaitingOnInput {
+        panic!("Unexpected end of input");
     }
+    let ob = comp.output().unwrap();
+    let r = VecDeque::clone(&ob.borrow().store).into();
+    r
 }
 
-fn read_param_mode(instr: i32, place: i32) -> i32 {
-    instr % place / (place / 10)
-}
-
-fn read(program: &mut Program, param: i32, mode: i32) -> i32 {
-    match mode {
-        0 => program[param as usize],
-        1 => param,
-        _ => panic!("Unsupported parameter mode: {}", mode)
-    }
+fn read_param_mode(instr: Value, place: i32) -> i32 {
+    (instr as i32) % place / (place / 10)
 }
 
 pub struct Computer {
     program: Program,
     ip: usize,
+    rel_base: usize,
     input: Option<Rc<RefCell<Stream>>>,
     output: Option<Rc<RefCell<Stream>>>,
 }
@@ -130,6 +50,7 @@ impl Computer {
         Computer {
             program,
             ip: 0,
+            rel_base: 0,
             input: None,
             output: None
         }
@@ -152,11 +73,113 @@ impl Computer {
     }
 
     pub fn execute(&mut self) -> ComputerState {
-        let input = self.input.as_ref().map(|it| it.borrow_mut());
-        let output = self.output.as_ref().map(|it| it.borrow_mut());
-        let (state, ip) = execute_streaming(&mut self.program, self.ip, input, output);
-        self.ip = ip;
-        state
+        let mut ip: usize = self.ip;
+        loop {
+            let instr = self.program[ip];
+            log::trace!("ip: {} instr: {}", ip, instr);
+            let op = instr % 100;
+            let pm1 = read_param_mode(instr, 1000);
+            let pm2 = read_param_mode(instr, 10000);
+            let pm3 = read_param_mode(instr, 100000);
+            match op {
+                1 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let b = self.read(self.program[ip + 2], pm2);
+                    self.write(self.program[ip + 3], pm3, a + b);
+                    ip += 4;
+                }
+                2 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let b = self.read(self.program[ip + 2], pm2);
+                    self.write(self.program[ip + 3], pm3, a * b);
+                    ip += 4;
+                }
+                3 => {
+                    log::debug!("trying to read...");
+                    let mut input = self.input.as_ref().map(|it| it.borrow_mut());
+                    let inp = match input.as_mut().and_then(|s| (*s).read()) {
+                        Some(x) => x,
+                        None => {
+                            self.ip = ip;
+                            return WaitingOnInput
+                        },
+                    };
+                    log::debug!("got an input: {}", inp);
+                    drop(input);
+                    self.write(self.program[ip + 1], pm1, inp);
+                    ip += 2;
+                }
+                4 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let mut output = self.output.as_ref().map(|it| it.borrow_mut());
+                    if let Some(s) = output.as_mut() {
+                        (*s).write(a);
+                    }
+                    ip += 2;
+                }
+                5 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let t = self.read(self.program[ip + 2], pm2);
+                    if a != 0 {
+                        ip = t as usize;
+                    } else {
+                        ip += 3;
+                    }
+                }
+                6 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let t = self.read(self.program[ip + 2], pm2);
+                    if a == 0 {
+                        ip = t as usize;
+                    } else {
+                        ip += 3;
+                    }
+                }
+                7 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let b = self.read(self.program[ip + 2], pm2);
+                    self.write(self.program[ip + 3], pm3, if a < b { 1 } else { 0 });
+                    ip += 4;
+                }
+                8 => {
+                    let a = self.read(self.program[ip + 1], pm1);
+                    let b = self.read(self.program[ip + 2], pm2);
+                    self.write(self.program[ip + 3], pm3, if a == b { 1 } else { 0 });
+                    ip += 4;
+                }
+                9 => {
+                    let d = self.read(self.program[ip + 1], pm1);
+                    self.rel_base = (self.rel_base as i64 + d) as usize;
+                    ip += 2;
+                }
+                99 => {
+                    self.ip = ip;
+                    return Halted
+                },
+                _ => panic!("Unrecognized opcode: {} @ ip {}", op, ip)
+            }
+        }
+    }
+
+    fn read(&self, param: Value, mode: i32) -> Value {
+        match mode {
+            0 => self.program[param as usize],
+            1 => param,
+            2 => self.program[(param + (self.rel_base as Value)) as usize],
+            _ => panic!("Unsupported parameter mode: {}", mode)
+        }
+    }
+
+    fn write(&mut self, param: Value, mode: i32, value: Value) {
+        let addr = match mode {
+            0 => param as usize,
+            2 => (param + (self.rel_base as i64)) as usize,
+            _ => panic!("Unsupported parameter mode: {}", mode)
+        };
+        if addr >= self.program.len() {
+            self.program.resize(addr + 1, 0)
+        }
+        self.program[addr] = value;
     }
 }
 
@@ -167,7 +190,7 @@ pub enum ComputerState {
 }
 
 pub struct Stream {
-    store: VecDeque<i32>
+    store: VecDeque<Value>
 }
 
 impl Stream {
@@ -177,21 +200,17 @@ impl Stream {
         }
     }
 
-    fn from_iter(iter: &mut dyn Iterator<Item=&i32>) -> Stream {
+    fn from_iter(iter: &mut dyn Iterator<Item=&Value>) -> Stream {
         Stream {
             store: iter.copied().collect()
         }
     }
 
-    fn into_vec(self) -> Vec<i32> {
-        self.store.into()
-    }
-
-    pub fn read(&mut self) -> Option<i32> {
+    pub fn read(&mut self) -> Option<Value> {
         self.store.pop_front()
     }
 
-    pub fn write(&mut self, value: i32) {
+    pub fn write(&mut self, value: Value) {
         self.store.push_back(value)
     }
 }
@@ -236,5 +255,11 @@ mod test {
         assert_eq!(vec![999], execute(&mut program.clone(), &mut [2].iter()));
         assert_eq!(vec![1000], execute(&mut program.clone(), &mut [8].iter()));
         assert_eq!(vec![1001], execute(&mut program.clone(), &mut [42].iter()));
+    }
+
+    #[test]
+    fn large() {
+        let mut program = parse_program("104,1125899906842624,99");
+        assert_eq!(vec![1125899906842624], execute(&mut program, &mut[].iter()))
     }
 }

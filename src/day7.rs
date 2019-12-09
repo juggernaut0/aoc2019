@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use crate::intcode::ComputerState;
 
-pub fn run1(input: Vec<String>) -> i32 {
+pub fn run1(input: Vec<String>) -> i64 {
     let program = intcode::parse_program(&input[0]);
     vec![0, 1, 2, 3, 4]
         .into_iter()
@@ -14,7 +14,7 @@ pub fn run1(input: Vec<String>) -> i32 {
         .unwrap()
 }
 
-pub fn run2(input: Vec<String>) -> i32 {
+pub fn run2(input: Vec<String>) -> i64 {
     let program = intcode::parse_program(&input[0]);
     vec![5, 6, 7, 8, 9]
         .into_iter()
@@ -24,17 +24,17 @@ pub fn run2(input: Vec<String>) -> i32 {
         .unwrap()
 }
 
-fn run_amps_once(program: &intcode::Program, phases: &[i32]) -> i32 {
+fn run_amps_once(program: &intcode::Program, phases: &[i32]) -> i64 {
     let mut signal = 0;
     for i in 0..5 {
-        let input = [phases[i], signal];
+        let input = [phases[i] as i64, signal];
         let output = intcode::execute(&mut program.clone(), &mut input.iter());
         signal = output[0];
     }
     signal
 }
 
-fn run_amps_looped(program: &intcode::Program, phases: &[i32]) -> i32 {
+fn run_amps_looped(program: &intcode::Program, phases: &[i32]) -> i64 {
     let mut computers = vec![
         intcode::Computer::new(program.clone()),
         intcode::Computer::new(program.clone()),
@@ -45,7 +45,7 @@ fn run_amps_looped(program: &intcode::Program, phases: &[i32]) -> i32 {
 
     for i in 0..5 {
         let mut s = intcode::Stream::new();
-        s.write(phases[i]);
+        s.write(phases[i] as i64);
         if i == 0 {
             s.write(0);
         }
