@@ -21,9 +21,8 @@ pub fn execute_no_io(program: &mut Program) {
 
 pub fn execute(program: &mut Program, input: &mut dyn Iterator<Item=&Value>) -> Vec<Value> {
     let mut comp = Computer::new(program.clone());
-    let output = Rc::new(RefCell::new(Stream::new()));
     comp.set_input(Some(Rc::new(RefCell::new(Stream::from_iter(input)))));
-    comp.set_output(Some(output));
+    comp.set_output(Some(Rc::new(RefCell::new(Stream::new()))));
     let state = comp.execute();
     if state == WaitingOnInput {
         panic!("Unexpected end of input");
