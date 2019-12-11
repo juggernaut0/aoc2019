@@ -162,9 +162,9 @@ impl Computer {
 
     fn read(&self, param: Value, mode: i32) -> Value {
         match mode {
-            0 => self.program[param as usize],
+            0 => self.program.get(param as usize).copied().unwrap_or(0),
             1 => param,
-            2 => self.program[(param + (self.rel_base as Value)) as usize],
+            2 => self.program.get((param + (self.rel_base as Value)) as usize).copied().unwrap_or(0),
             _ => panic!("Unsupported parameter mode: {}", mode)
         }
     }
@@ -197,6 +197,10 @@ impl Stream {
         Stream {
             store: VecDeque::new()
         }
+    }
+
+    pub fn new_wrapped() -> Rc<RefCell<Stream>> {
+        Rc::new(RefCell::new(Stream::new()))
     }
 
     fn from_iter(iter: &mut dyn Iterator<Item=&Value>) -> Stream {
