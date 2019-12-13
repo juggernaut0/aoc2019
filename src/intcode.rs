@@ -216,6 +216,14 @@ impl Stream {
     pub fn write(&mut self, value: Value) {
         self.store.push_back(value)
     }
+
+    pub fn read_all(&mut self) -> Vec<Value> {
+        let mut res = Vec::new();
+        while let Some(v) = self.read() {
+            res.push(v)
+        }
+        res
+    }
 }
 
 #[cfg(test)]
