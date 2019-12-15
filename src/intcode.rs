@@ -95,8 +95,11 @@ impl Computer {
                 }
                 3 => {
                     log::debug!("trying to read...");
-                    let mut input = self.input.as_ref().map(|it| it.borrow_mut());
-                    let inp = match input.as_mut().and_then(|s| (*s).read()) {
+                    let input = self.input
+                        .as_ref()
+                        .map(|it| it.borrow_mut())
+                        .and_then(|mut s| s.read());
+                    let inp = match input {
                         Some(x) => x,
                         None => {
                             self.ip = ip;
@@ -104,15 +107,16 @@ impl Computer {
                         },
                     };
                     log::debug!("got an input: {}", inp);
-                    drop(input);
                     self.write(self.program[ip + 1], pm1, inp);
                     ip += 2;
                 }
                 4 => {
                     let a = self.read(self.program[ip + 1], pm1);
-                    let mut output = self.output.as_ref().map(|it| it.borrow_mut());
-                    if let Some(s) = output.as_mut() {
-                        (*s).write(a);
+                    let output = self.output
+                        .as_ref()
+                        .map(|it| it.borrow_mut());
+                    if let Some(mut s) = output {
+                        s.write(a);
                     }
                     ip += 2;
                 }
