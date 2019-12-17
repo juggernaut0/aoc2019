@@ -228,6 +228,12 @@ impl Stream {
         }
         res
     }
+
+    pub fn write_all(&mut self, values: &[Value]) {
+        for &v in values {
+            self.write(v);
+        }
+    }
 }
 
 #[cfg(test)]
