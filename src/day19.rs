@@ -16,8 +16,8 @@ pub fn run2(input: Vec<String>) -> i64 {
     let program = parse_program(&input[0]);
 
     let mut x = 700;
-    let mut last_y = 0;
-    let (mut tlx, mut tly) = loop {
+    //let mut last_y = 0;
+    let (tlx, tly) = loop {
         let mut y = 900;
         loop {
             let output = test(program.clone(), x, y);
@@ -33,7 +33,7 @@ pub fn run2(input: Vec<String>) -> i64 {
             break ((x - 99), y);
         }
         x += 1;
-        last_y = y;
+        //last_y = y;
     };
 
     for y in 1050..1200 {
