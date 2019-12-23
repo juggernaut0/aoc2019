@@ -94,7 +94,7 @@ impl Computer {
                     ip += 4;
                 }
                 3 => {
-                    log::debug!("trying to read...");
+                    log::trace!("trying to read...");
                     let input = self.input
                         .as_ref()
                         .map(|it| it.borrow_mut())
@@ -106,7 +106,7 @@ impl Computer {
                             return WaitingOnInput
                         },
                     };
-                    log::debug!("got an input: {}", inp);
+                    log::trace!("got an input: {}", inp);
                     self.write(self.program[ip + 1], pm1, inp);
                     ip += 2;
                 }
