@@ -31,6 +31,7 @@ mod day20;
 mod day21;
 mod day22;
 mod day23;
+mod day24;
 
 fn main() {
     let matches = App::new("aoc2019")
@@ -104,6 +105,8 @@ fn main() {
         "22-2" => execute("22.txt", day22::run2),
         "23-1" => execute("23.txt", day23::run1),
         "23-2" => execute("23.txt", day23::run2),
+        "24-1" => execute("24.txt", day24::run1),
+        "24-2" => execute("24.txt", day24::run2),
         _ => "No puzzle with that number".to_string()
     })
 }
