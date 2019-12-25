@@ -234,6 +234,20 @@ impl Stream {
             self.write(v);
         }
     }
+
+    pub fn read_ascii(&mut self) -> String {
+        let mut res = String::new();
+        while let Some(v) = self.read() {
+            res.push(v as u8 as char);
+        }
+        res
+    }
+
+    pub fn write_ascii(&mut self, s: &str) {
+        for c in s.chars() {
+            self.write(c as u32 as i64)
+        }
+    }
 }
 
 #[cfg(test)]
